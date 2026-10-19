@@ -16,3 +16,33 @@ def pregunta_12():
     """
 
     raise NotImplementedError
+
+from pathlib import Path
+import pandas as pd
+
+
+def pregunta_12():
+    """
+    En `data/tbl2.tsv`, cada valor de la columna `c0` aparece en varias
+    filas. Construya un DataFrame con una fila por cada valor de `c0`, en
+    orden ascendente, y las columnas `c0` y `c5`. En `c5`, forme un texto
+    `c5a:c5b` para cada fila de ese `c0`, ordene esos textos alfabéticamente y
+    únalos separados por comas.
+    """
+    data_path = Path(__file__).resolve().parents[1] / "data" / "tbl2.tsv"
+    df = pd.read_csv(data_path, sep="\t")
+
+    # Unir las columnas c5a y c5b con ':'
+    df["c5"] = df["c5a"].astype(str) + ":" + df["c5b"].astype(str)
+
+    # Agrupar por c0, ordenar alfabéticamente las cadenas formadas y unirlas con comas
+    res = (
+        df.groupby("c0")["c5"]
+        .apply(lambda x: ",".join(sorted(x)))
+        .reset_index()
+    )
+    return res
+
+
+if __name__ == "__main__":
+    print(pregunta_12())

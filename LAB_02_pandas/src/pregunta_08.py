@@ -13,3 +13,22 @@ def pregunta_08():
     """
 
     raise NotImplementedError
+
+
+from pathlib import Path
+import pandas as pd
+
+
+def pregunta_08():
+    """
+    Retorne la tabla `data/tbl0.tsv` completa con una columna adicional
+    llamada `suma`, al final, cuyo valor en cada fila es `c0 + c2`.
+    """
+    data_path = Path(__file__).resolve().parents[1] / "data" / "tbl0.tsv"
+    df = pd.read_csv(data_path, sep="\t")
+    df["suma"] = df["c0"] + df["c2"]
+    return df
+
+
+if __name__ == "__main__":
+    print(pregunta_08())

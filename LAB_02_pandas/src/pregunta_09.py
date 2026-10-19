@@ -14,3 +14,22 @@ def pregunta_09():
     """
 
     raise NotImplementedError
+
+from pathlib import Path
+import pandas as pd
+
+
+def pregunta_09():
+    """
+    Retorne la tabla `data/tbl0.tsv` completa con una columna adicional
+    llamada `year`, al final, que contenga el año de la fecha de la columna
+    `c3` como un texto de cuatro caracteres.
+    """
+    data_path = Path(__file__).resolve().parents[1] / "data" / "tbl0.tsv"
+    df = pd.read_csv(data_path, sep="\t")
+    df["year"] = df["c3"].astype(str).str[:4]
+    return df
+
+
+if __name__ == "__main__":
+    print(pregunta_09())
