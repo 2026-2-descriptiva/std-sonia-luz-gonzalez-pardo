@@ -27,3 +27,82 @@ def pregunta_01():
     """
 
     raise NotImplementedError
+
+import re
+from pathlib import Path
+import pandas as pd
+
+
+def pregunta_01():
+    """
+    Convierte el reporte `clusters_report.txt` en un DataFrame de Pandas estructurado.
+    """
+    data_path = Path(__file__).resolve().parents[1] / "data" / "clusters_report.txt"
+
+    clusters = []
+    cluster_actual = None
+
+    with open(data_path, "r", encoding="utf-8") as file:
+        lines = file.readlines()
+
+    for line in lines[4:]:
+        if not line.strip():
+            continue
+
+        match = re.match(r"^\s*(\d+)\s+(\d+)\s+([\d,]+)\s*%\s+(.*)", line)
+
+        if match:
+            if cluster_actual:
+                # Unir lineas y normalizar espacios internos
+                texto_completo = " ".join(cluster_actual["palabras"])
+                texto_limpio = re.sub(r"\s+", " ", texto_completo)
+                
+                # Separar por comas, quitar espacios laterales y eliminar punto final
+                palabras = [p.strip() for p in texto_limpio.split(",") if p.strip()]
+                palabras_unidas = ", ".join(palabras)
+                if palabras_unidas.endswith("."):
+                    palabras_unidas = palabras_unidas[:-1]
+
+                clusters.append({
+                    "cluster": cluster_actual["cluster"],
+                    "cantidad_de_palabras_clave": cluster_actual["cantidad"],
+                    "porcentaje_de_palabras_clave": cluster_actual["porcentaje"],
+                    "principales_palabras_clave": palabras_unidas,
+                })
+
+            cluster_num = int(match.group(1))
+            cantidad = int(match.group(2))
+            porcentaje = float(match.group(3).replace(",", "."))
+            palabras_iniciales = match.group(4).strip()
+
+            cluster_actual = {
+                "cluster": cluster_num,
+                "cantidad": cantidad,
+                "porcentaje": porcentaje,
+                "palabras": [palabras_iniciales],
+            }
+        else:
+            if cluster_actual:
+                cluster_actual["palabras"].append(line.strip())
+
+    # Procesar el último clúster
+    if cluster_actual:
+        texto_completo = " ".join(cluster_actual["palabras"])
+        texto_limpio = re.sub(r"\s+", " ", texto_completo)
+        palabras = [p.strip() for p in texto_limpio.split(",") if p.strip()]
+        palabras_unidas = ", ".join(palabras)
+        if palabras_unidas.endswith("."):
+            palabras_unidas = palabras_unidas[:-1]
+
+        clusters.append({
+            "cluster": cluster_actual["cluster"],
+            "cantidad_de_palabras_clave": cluster_actual["cantidad"],
+            "porcentaje_de_palabras_clave": cluster_actual["porcentaje"],
+            "principales_palabras_clave": palabras_unidas,
+        })
+
+    return pd.DataFrame(clusters)
+
+
+if __name__ == "__main__":
+    print(pregunta_01())

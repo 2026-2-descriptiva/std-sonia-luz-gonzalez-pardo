@@ -27,3 +27,48 @@ def pregunta_01():
     """
 
     raise NotImplementedError
+
+from pathlib import Path
+import pandas as pd
+
+
+def generar_dataset(split_dir: Path) -> pd.DataFrame:
+    filas = []
+    # Recorremos las subcarpetas de sentimiento en orden alfabético
+    carpetas_sentimiento = sorted([d for d in split_dir.iterdir() if d.is_dir()])
+
+    for carpeta in carpetas_sentimiento:
+        target = carpeta.name
+        # Recorremos los archivos .txt en orden alfabético
+        archivos = sorted(list(carpeta.glob("*.txt")))
+        for archivo in archivos:
+            with open(archivo, "r", encoding="utf-8") as f:
+                texto = f.read().strip()
+                filas.append({"phrase": texto, "target": target})
+
+    return pd.DataFrame(filas)
+
+
+def pregunta_01():
+    """
+    Construye los datasets para train y test a partir de la estructura de carpetas
+    y los guarda en la carpeta submission/
+    """
+    base_dir = Path(__file__).resolve().parents[1]
+    data_dir = base_dir / "data"
+    submission_dir = base_dir / "submission"
+
+    # Crear la carpeta submission si no existe
+    submission_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generar y guardar train
+    train_df = generar_dataset(data_dir / "train")
+    train_df.to_csv(submission_dir / "train_dataset.csv", index=False)
+
+    # Generar y guardar test
+    test_df = generar_dataset(data_dir / "test")
+    test_df.to_csv(submission_dir / "test_dataset.csv", index=False)
+
+
+if __name__ == "__main__":
+    pregunta_01()
