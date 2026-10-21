@@ -59,3 +59,126 @@ def pregunta_01() -> tuple[pd.DataFrame, pd.DataFrame]:
     """
 
     raise NotImplementedError
+
+import os
+import pandas as pd
+
+
+def pregunta_01() -> tuple[pd.DataFrame, pd.DataFrame]:
+
+    # 1. Determinar rutas de lectura y entrega
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data_path = os.path.join(base_dir, "data", "flights_by_carrier_day_hour.csv.gz")
+    submission_dir = os.path.join(base_dir, "src", "submission")
+
+    if not os.path.exists(data_path):
+        data_path = "data/flights_by_carrier_day_hour.csv.gz"
+        submission_dir = "submission"
+
+    os.makedirs("submission", exist_ok=True)
+    os.makedirs(submission_dir, exist_ok=True)
+
+    # 2. Cargar datos
+    df = pd.read_csv(data_path)
+
+    # -------------------------------------------------------------------------
+    # TABLA 1: hourly_delay_rates.csv
+    # -------------------------------------------------------------------------
+    hourly = (
+        df.groupby("scheduled_departure_hour", as_index=False)[
+            ["operated_flights", "delayed_departure_15_flights"]
+        ]
+        .sum()
+        .sort_values(by="scheduled_departure_hour")
+    )
+
+    hourly["delay_rate"] = (
+        hourly["delayed_departure_15_flights"] / hourly["operated_flights"]
+    )
+
+    cols_hourly = [
+        "scheduled_departure_hour",
+        "operated_flights",
+        "delayed_departure_15_flights",
+        "delay_rate",
+    ]
+    hourly = hourly[cols_hourly]
+
+    # Guardar entregable 1
+    hourly.to_csv("submission/hourly_delay_rates.csv", index=False)
+    hourly.to_csv(
+        os.path.join(submission_dir, "hourly_delay_rates.csv"), index=False
+    )
+
+    # -------------------------------------------------------------------------
+    # TABLA 2: carrier_adjusted_delays.csv
+    # -------------------------------------------------------------------------
+    # Mapear la tasa nacional horaria al dataframe general
+    df_merged = df.merge(
+        hourly[["scheduled_departure_hour", "delay_rate"]],
+        on="scheduled_departure_hour",
+        how="left",
+    )
+
+    # Demoras esperadas para cada registro
+    df_merged["expected_delays"] = (
+        df_merged["operated_flights"] * df_merged["delay_rate"]
+    )
+
+    # Agrupar por aerolínea
+    carrier = (
+        df_merged.groupby("reporting_airline", as_index=False)
+        .agg(
+            operated_flights=("operated_flights", "sum"),
+            delayed_departure_15_flights=("delayed_departure_15_flights", "sum"),
+            expected_delayed_flights=("expected_delays", "sum"),
+        )
+    )
+
+    # Filtrar aerolíneas con al menos 100,000 vuelos operados
+    carrier = carrier[carrier["operated_flights"] >= 100000].copy()
+
+    # Tasas y ratios
+    carrier["delay_rate"] = (
+        carrier["delayed_departure_15_flights"] / carrier["operated_flights"]
+    )
+    carrier["observed_to_expected_ratio"] = (
+        carrier["delayed_departure_15_flights"] / carrier["expected_delayed_flights"]
+    )
+
+    # Rankings (1 es la peor aerolínea -> mayor tasa/ratio)
+    carrier["crude_rank"] = (
+        carrier["delay_rate"].rank(ascending=False, method="min").astype(int)
+    )
+    carrier["adjusted_rank"] = (
+        carrier["observed_to_expected_ratio"]
+        .rank(ascending=False, method="min")
+        .astype(int)
+    )
+
+    # Ordenar por adjusted_rank
+    carrier = carrier.sort_values(by="adjusted_rank", ascending=True)
+
+    cols_carrier = [
+        "reporting_airline",
+        "operated_flights",
+        "delayed_departure_15_flights",
+        "delay_rate",
+        "expected_delayed_flights",
+        "observed_to_expected_ratio",
+        "crude_rank",
+        "adjusted_rank",
+    ]
+    carrier = carrier[cols_carrier]
+
+    # Guardar entregable 2
+    carrier.to_csv("submission/carrier_adjusted_delays.csv", index=False)
+    carrier.to_csv(
+        os.path.join(submission_dir, "carrier_adjusted_delays.csv"), index=False
+    )
+
+    return hourly, carrier
+
+
+if __name__ == "__main__":
+    pregunta_01()

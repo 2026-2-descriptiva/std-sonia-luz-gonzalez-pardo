@@ -22,3 +22,4 @@
 --
 --  Escriba su consulta debajo de esta línea.
 --
+SELECT CAST(SUBSTR(c14, 1, 4) AS INT), COUNT(*) FROM tbl1 WHERE SUBSTR(c14, 1, 4) = '2018';

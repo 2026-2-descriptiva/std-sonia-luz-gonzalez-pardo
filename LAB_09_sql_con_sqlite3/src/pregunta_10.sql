@@ -24,4 +24,4 @@
 --  4   I  3000  300  PPPPL  0.3
 --
 --  Escriba su consulta debajo de esta línea.
---
+SELECT * FROM tbl0 WHERE c01 >= 1000 AND c02 >= 300 ORDER BY c01 DESC;

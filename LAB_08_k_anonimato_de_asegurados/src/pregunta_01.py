@@ -81,3 +81,152 @@ def pregunta_01():
     """
 
     raise NotImplementedError
+
+
+import json
+from pathlib import Path
+import pandas as pd
+
+
+def pregunta_01():
+    """
+    Evalúa esquemas de generalización y k-anonimato (k=5) sobre insurance.csv.gz,
+    genera `submission/privacy_report.json` e `submission/insurance_published.csv`.
+    """
+    base_dir = Path(__file__).resolve().parents[1]
+    data_path = base_dir / "data" / "insurance.csv.gz"
+    submission_dir = base_dir / "submission"
+    submission_dir.mkdir(parents=True, exist_ok=True)
+
+    df = pd.read_csv(data_path, compression="gzip")
+
+    # 1. Análisis sin generalizar (Cuasi-identificadores originales)
+    orig_qi = ["age", "sex", "bmi", "children", "region"]
+    orig_counts = df.groupby(orig_qi).size()
+    original_k = int(orig_counts.min())
+    original_unique_records = int((orig_counts == 1).sum())
+
+    # 2. Generalización de columnas
+    def get_age_group(age):
+        if age <= 29:
+            return "18-29"
+        elif age <= 39:
+            return "30-39"
+        elif age <= 49:
+            return "40-49"
+        else:
+            return "50-64"
+
+    def get_bmi_group(bmi):
+        if bmi < 18.5:
+            return "bajo peso"
+        elif bmi < 25.0:
+            return "normal"
+        elif bmi < 30.0:
+            return "sobrepeso"
+        else:
+            return "obesidad"
+
+    def get_children_group(c):
+        if c == 0:
+            return "0"
+        elif c in [1, 2]:
+            return "1-2"
+        else:
+            return "3+"
+
+    df["age_group"] = df["age"].apply(get_age_group)
+    df["bmi_group"] = df["bmi"].apply(get_bmi_group)
+    df["children_group"] = df["children"].apply(get_children_group)
+
+    # 3. Definición de Esquemas
+    schemes_def = {
+        "with_children": ["age_group", "sex", "bmi_group", "children_group", "region"],
+        "without_children": ["age_group", "sex", "bmi_group", "region"],
+    }
+
+    schemes_report = {}
+    published_dfs = {}
+
+    for scheme_name, qi_cols in schemes_def.items():
+        # Agrupar para analizar clases de equivalencia antes de suprimir
+        counts = df.groupby(qi_cols).size()
+        equivalence_classes = len(counts)
+        k_before_suppression = int(counts.min())
+
+        # Identificar registros que cumplen k >= 5
+        class_sizes = df.groupby(qi_cols)[qi_cols[0]].transform("count")
+        mask_k5 = class_sizes >= 5
+
+        suppressed_records = int((~mask_k5).sum())
+        published_records = int(mask_k5.sum())
+
+        df_pub = df[mask_k5].copy()
+        published_classes = len(df_pub.groupby(qi_cols))
+
+        # Diversidad del atributo sensible (smoker)
+        # Clases sin diversidad: todos fuman o ninguno fuma (nunique == 1)
+        smoker_diversity = df_pub.groupby(qi_cols)["smoker"].nunique()
+        classes_without_smoker_diversity = int((smoker_diversity == 1).sum())
+
+        # Constrastamos con cada fila publicada
+        pub_smoker_div = df_pub.groupby(qi_cols)["smoker"].transform("nunique")
+        records_without_smoker_diversity = int((pub_smoker_div == 1).sum())
+
+        schemes_report[scheme_name] = {
+            "quasi_identifiers": qi_cols,
+            "equivalence_classes": equivalence_classes,
+            "k_before_suppression": k_before_suppression,
+            "suppressed_records": suppressed_records,
+            "published_records": published_records,
+            "published_classes": published_classes,
+            "classes_without_smoker_diversity": classes_without_smoker_diversity,
+            "records_without_smoker_diversity": records_without_smoker_diversity,
+        }
+
+        published_dfs[scheme_name] = df_pub
+
+    # 4. Selección del Esquema que suprime menos registros
+    if (
+        schemes_report["with_children"]["suppressed_records"]
+        <= schemes_report["without_children"]["suppressed_records"]
+    ):
+        selected_scheme = "with_children"
+    else:
+        selected_scheme = "without_children"
+
+    selected_df = published_dfs[selected_scheme]
+    selected_qi = schemes_def[selected_scheme]
+
+    # Métricas de impacto/utilidad
+    mean_charges_original = float(df["charges"].mean())
+    mean_charges_published = float(selected_df["charges"].mean())
+
+    smoker_rate_original = float((df["smoker"] == "yes").mean())
+    smoker_rate_published = float((selected_df["smoker"] == "yes").mean())
+
+    # 5. Generar Reporte JSON
+    report = {
+        "original_k": original_k,
+        "original_unique_records": original_unique_records,
+        "schemes": schemes_report,
+        "selected_scheme": selected_scheme,
+        "mean_charges_original": mean_charges_original,
+        "mean_charges_published": mean_charges_published,
+        "smoker_rate_original": smoker_rate_original,
+        "smoker_rate_published": smoker_rate_published,
+    }
+
+    with open(submission_dir / "privacy_report.json", "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=4, ensure_ascii=False)
+
+    # 6. Guardar CSV publicado (mismo orden del archivo original, columnas QI + smoker + charges)
+    cols_to_export = selected_qi + ["smoker", "charges"]
+    export_df = selected_df[cols_to_export]
+    export_df.to_csv(submission_dir / "insurance_published.csv", index=False)
+
+    return report
+
+
+if __name__ == "__main__":
+    pregunta_01()
